@@ -68,7 +68,7 @@ async function getTotalBalance(address, ethSnapshot) {
 
     // 计算总余额（BigInt 相加）
     const totalBalance = balances.reduce((sum, balance) => sum + balance, 0n);
-    return ethers.formatEther(totalBalance);
+    return ethers.formatEther(totalBalance).split(".")[0];
 }
 
 
@@ -96,7 +96,7 @@ app.get("/balance", async (req, res) => {
 });
 
 // 启动服务器
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });
