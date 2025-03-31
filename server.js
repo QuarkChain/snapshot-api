@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { ethers } = require("ethers");
+const {ethers} = require("ethers");
 const axios = require("axios");
 
 const app = express();
@@ -9,7 +9,17 @@ app.use(cors());
 app.use(express.json());
 
 // TODO
-const SHARD_RPC_URLS = Array.from({ length: 8 }, (_, i) => `http://88.99.30.186:${39900 + i}`);
+const SHARD_RPC_URLS = [
+    'http://88.99.30.186:39900',
+    'http://88.99.30.186:39901',
+    'http://88.99.30.186:39902',
+    'http://88.99.30.186:39903',
+    'http://88.99.30.186:39904',
+    'http://88.99.30.186:39905',
+    'http://88.99.30.186:39906',
+    'http://88.99.30.186:39907'
+];
+const ETH_RPC_URL = "https://eth.llamarpc.com"
 
 async function getBalance(rpcUrl, address, blockNumber) {
     try {
@@ -26,7 +36,7 @@ async function getBalance(rpcUrl, address, blockNumber) {
     }
 }
 
-async function getShardBlockNumber(rpcUrl) {
+async function getBlockNumber(rpcUrl) {
     try {
         const response = await axios.post(rpcUrl, {
             jsonrpc: "2.0",
@@ -42,23 +52,72 @@ async function getShardBlockNumber(rpcUrl) {
     }
 }
 
-// **计算 ETH 高度对应的分片高度**
-async function convertEthToShardBlock(ethBlockNumber) {
-    // 获取所有分片的当前最高高度
-    const shardBlockNumbers = await Promise.all(SHARD_RPC_URLS.map(getShardBlockNumber));
-
-    // ETH 高度偏移
-    const ethLatestBlock = await getShardBlockNumber("https://eth.llamarpc.com");
-    const ethBlockDelta = ethLatestBlock - ethBlockNumber;
-
-    // 计算对应的分片高度（假设每个分片 12 秒一个块）
-    return shardBlockNumbers.map(shardHeight => Math.max(0, shardHeight - ethBlockDelta));
+async function getBlockTimestamp(rpcUrl, blockNumber) {
+    try {
+        const response = await axios.post(rpcUrl, {
+            jsonrpc: "2.0",
+            method: "eth_getBlockByNumber",
+            params: [ "0x" + blockNumber.toString(16), false ],
+            id: 1
+        });
+        if (!response.data.result || !response.data.result.timestamp) return 0;
+        return parseInt(response.data.result.timestamp, 16);
+    } catch (error) {
+        console.error(`Error fetching timestamp from ${rpcUrl}:`, error.message);
+        return 0;
+    }
 }
+
+
+// 启动时获取区块高度
+let shardBlockData = [];
+
+async function initializeShardData() {
+    shardBlockData = await Promise.all(
+        SHARD_RPC_URLS.map(async (rpcUrl) => {
+            const latestBlock = await getBlockNumber(rpcUrl);
+            return {rpcUrl, latestBlock};
+        })
+    );
+}
+
+async function binarySearchBlock(rpc, ethBlockTimestamp, startBlock, latestBlock) {
+    let low = startBlock, high = latestBlock;
+    while (low <= high) {
+        let mid = Math.floor((low + high) / 2);
+        const midTimestamp = await getBlockTimestamp(rpc, mid);
+        if (midTimestamp === 0) break;
+
+        if (Math.abs(midTimestamp - ethBlockTimestamp) <= 60) {
+            return mid;
+        } else if (midTimestamp > ethBlockTimestamp) {
+            high = mid - 1;
+        } else {
+            low = mid + 1;
+        }
+    }
+    return low;
+}
+
+// **计算 ETH 高度对应的分片高度**
+async function convertEthBlockToShardBlock(ethBlockNumber) {
+    const ethTimestamp = await getBlockTimestamp(ETH_RPC_URL, ethBlockNumber);
+    if (ethTimestamp === 0) return await Promise.all(SHARD_RPC_URLS.map(getBlockNumber));
+
+    return await Promise.all(
+        SHARD_RPC_URLS.map(async (rpc, index) => {
+            const latestBlock = await getBlockNumber(rpc);
+            const blockNumber = await binarySearchBlock(rpc, ethTimestamp, shardBlockData[index].latestBlock, latestBlock);
+            return Math.max(0, blockNumber);
+        })
+    );
+}
+
 
 // **获取用户的总余额**
 async function getTotalBalance(address, ethSnapshot) {
     // 计算 ETH 高度对应的各分片高度
-    const shardBlockNumbers = ethSnapshot ? await convertEthToShardBlock(ethSnapshot) : [];
+    const shardBlockNumbers = ethSnapshot ? await convertEthBlockToShardBlock(ethSnapshot) : [];
     console.log("shardBlockNumbers", shardBlockNumbers)
 
     // 获取每个分片的余额
@@ -96,7 +155,9 @@ app.get("/balance", async (req, res) => {
 });
 
 // 启动服务器
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
+initializeShardData().then(() => {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on port ${PORT}`);
+    });
 });
