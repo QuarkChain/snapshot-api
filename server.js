@@ -8,16 +8,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// TODO
 const SHARD_RPC_URLS = [
-    'http://88.99.30.186:39900',
-    'http://88.99.30.186:39901',
-    'http://88.99.30.186:39902',
-    'http://88.99.30.186:39903',
-    'http://88.99.30.186:39904',
-    'http://88.99.30.186:39905',
-    'http://88.99.30.186:39906',
-    'http://88.99.30.186:39907'
+    'https://mainnet-s0-ethapi.quarkchain.io',
+    'https://mainnet-s1-ethapi.quarkchain.io',
+    'https://mainnet-s2-ethapi.quarkchain.io',
+    'https://mainnet-s3-ethapi.quarkchain.io',
+    'https://mainnet-s4-ethapi.quarkchain.io',
+    'https://mainnet-s5-ethapi.quarkchain.io',
+    'https://mainnet-s6-ethapi.quarkchain.io',
+    'https://mainnet-s7-ethapi.quarkchain.io',
 ];
 const ETH_RPC_URL = "https://eth.llamarpc.com";
 const ethToShardBlockCache = {};
