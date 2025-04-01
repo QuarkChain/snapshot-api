@@ -19,7 +19,8 @@ const SHARD_RPC_URLS = [
     'http://88.99.30.186:39906',
     'http://88.99.30.186:39907'
 ];
-const ETH_RPC_URL = "https://eth.llamarpc.com"
+const ETH_RPC_URL = "https://eth.llamarpc.com";
+const ethToShardBlockCache = {};
 
 async function getBalance(rpcUrl, address, blockNumber) {
     try {
@@ -75,8 +76,7 @@ let shardBlockData = [];
 async function initializeShardData() {
     shardBlockData = await Promise.all(
         SHARD_RPC_URLS.map(async (rpcUrl) => {
-            const latestBlock = await getBlockNumber(rpcUrl);
-            return {rpcUrl, latestBlock};
+            return await getBlockNumber(rpcUrl);
         })
     );
 }
@@ -101,16 +101,22 @@ async function binarySearchBlock(rpc, ethBlockTimestamp, startBlock, latestBlock
 
 // **计算 ETH 高度对应的分片高度**
 async function convertEthBlockToShardBlock(ethBlockNumber) {
+    if (ethToShardBlockCache[ethBlockNumber]) {
+        return ethToShardBlockCache[ethBlockNumber];
+    }
+
     const ethTimestamp = await getBlockTimestamp(ETH_RPC_URL, ethBlockNumber);
     if (ethTimestamp === 0) return await Promise.all(SHARD_RPC_URLS.map(getBlockNumber));
 
-    return await Promise.all(
+    const shardBlockNumbers = await Promise.all(
         SHARD_RPC_URLS.map(async (rpc, index) => {
             const latestBlock = await getBlockNumber(rpc);
-            const blockNumber = await binarySearchBlock(rpc, ethTimestamp, shardBlockData[index].latestBlock, latestBlock);
+            const blockNumber = await binarySearchBlock(rpc, ethTimestamp, shardBlockData[index], latestBlock);
             return Math.max(0, blockNumber);
         })
     );
+    ethToShardBlockCache[ethBlockNumber] = shardBlockNumbers;
+    return shardBlockNumbers;
 }
 
 
