@@ -49,8 +49,7 @@ async function getTotalBalance(address) {
 
     // 计算总余额（BigInt 相加）
     const totalBalance = balances.reduce((sum, balance) => sum + balance, 0n);
-    const formattedBalance = ethers.formatEther(totalBalance);
-    return parseFloat(formattedBalance).toFixed(2);
+    return ethers.formatEther(totalBalance).split(".")[0];
 }
 
 
